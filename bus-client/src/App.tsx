@@ -1,245 +1,250 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { useAxios } from './hooks/useAxios'; // 자동 조회 훅
+import { useApi } from './hooks/useApi';     // 수동 요청 훅
 import './App.css';
 
 interface Station {
   id?: number;
-  stationId: string; // API용 내부 ID (stId)
-  stationName: string; // 정류장 이름 (stNm)
-  arsId: string;     // 정류장 번호 (arsId, 5자리)
+  stationId: string;
+  stationName: string;
+  arsId: string;
 }
 
 function App() {
-  const [stations, setStations] = useState<Station[]>([]);
-  const [arrivalInfo, setArrivalInfo] = useState<any>(null);
-
-  // ✨ 검색 관련 상태
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-
-  // ✨ 로딩 상태
-  const [isLoading, setIsLoading] = useState(false);
-
-  // ✨ 내 목록 검색어 상태
-  const [myKeyword, setMyKeyword] = useState('');
+  // ✅ 1. 내 정류장 목록 (자동 조회)
+  // useAxios 덕분에 useEffect가 필요 없습니다!
+  const { 
+    data: stations, 
+    loading: isListLoading, 
+    error: listError, 
+    refetch: refreshStations // 목록 새로고침 함수
+  } = useAxios<Station[]>('http://localhost:8080/api/stations');
 
   useEffect(() => {
-    getStations();
-  }, []);
-
-  // ✨ NEW: 내 DB 검색 함수
-  const handleLocalSearch = async (e?: React.FormEvent) => {
-    if(e) e.preventDefault(); // 엔터키 눌렀을 때 새로고침 방지
-    
-    if (!myKeyword) {
-        alert("검색어를 입력하세요!");
-        return;
+    if (stations) {
+      console.log("📂 [DB Load] 내 정류장 전체 목록:", stations);
+      console.log("🔢 총 정류장 개수:", stations.length);
     }
+  }, [stations]); // stations 값이 바뀔 때마다 실행됨
 
-    try {
-      // 내 서버의 로컬 검색 API 호출
-      const response = await axios.get<Station[]>(`http://localhost:8080/api/stations/local-search?keyword=${myKeyword}`);
-      setStations(response.data);
-      if(response.data.length === 0) {
-          alert("저장된 정류장 중 검색 결과가 없습니다.");
-      }
-    } catch (error) {
-      console.error("검색 실패:", error);
-    }
-  };
+  // ✅ 2. 수동 요청 처리기 (검색, 저장, 삭제 등)
+  const { request, loading: isActionLoading } = useApi();
 
-  // 내 DB에서 저장된 목록 가져오기
-  const getStations = async () => {
-    try {
-      const response = await axios.get<Station[]>('http://localhost:8080/api/stations');
-      setStations(response.data);
-    } catch (error) {
-      console.error("데이터 로드 실패:", error);
-    }
-  };
+  // 상태 관리
+  const [arrivalInfo, setArrivalInfo] = useState<any>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [myKeyword, setMyKeyword] = useState('');
 
-  // ✨ NEW: 전체 동기화 함수
-  const handleSync = async () => {
-    if (!window.confirm("서울시 모든 정류장(약 1만개)을 저장합니다.\n1~2분 정도 소요됩니다. 진행할까요?")) return;
-
-    setIsLoading(true); // 로딩 시작
-    try {
-      const response = await axios.post('http://localhost:8080/api/stations/sync');
-      alert(response.data); // "총 12000개 저장되었습니다!" 메시지 출력
-      getStations(); // 목록 새로고침
-    } catch (error) {
-      console.error("동기화 실패:", error);
-      alert("동기화 중 오류가 발생했습니다.");
-    } finally {
-      setIsLoading(false); // 로딩 끝
-    }
-  };
-
-  // 서울시 API에서 정류장 이름으로 검색
+  // 3. 공공데이터 검색 (수동)
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchKeyword) return;
 
-    try {
-      // 백엔드에 검색 요청
-      const response = await axios.get(`http://localhost:8080/api/stations/search?keyword=${searchKeyword}`);
-      console.log("검색 결과:", response.data);
+    // useApi의 request 사용
+    const { success, data } = await request<any>(() => 
+      axios.get(`http://localhost:8080/api/stations/search?keyword=${searchKeyword}`)
+    );
 
-      const items = response.data?.msgBody?.itemList;
-      // 검색 결과가 1개일 때와 여러 개일 때 처리
-      if (items) {
-        setSearchResults(Array.isArray(items) ? items : [items]);
-      } else {
-        setSearchResults([]);
-        alert("검색 결과가 없습니다.");
-      }
-    } catch (error) {
-      console.error("검색 실패:", error);
-      alert("검색 중 오류가 발생했습니다.");
+    if (success && data) {
+      const items = data.msgBody?.itemList;
+      setSearchResults(items ? (Array.isArray(items) ? items : [items]) : []);
+      if (!items) alert("검색 결과가 없습니다.");
     }
   };
 
-  // 3. ✨ [저장] 검색된 정류장을 내 DB에 저장
+  // 4. 내 목록 검색 (수동)
+  const filteredStations = stations?.filter((station) => 
+    station.stationName.includes(myKeyword) || 
+    station.arsId.includes(myKeyword)
+  );
+
+  // 5. 저장하기 (수동)
   const handleSave = async (station: any) => {
-    // 이미 저장된 정류장인지 확인 (arsId 기준)
-    const isExist = stations.some(s => s.arsId === station.arsId);
-    if (isExist) {
-      alert("이미 저장된 정류장입니다!");
+    // 중복 체크 (stations 데이터가 로드된 상태여야 함)
+    if (stations && stations.some(s => s.arsId === station.arsId)) {
+      alert("이미 저장된 정류장입니다.");
       return;
     }
 
-    const newStation: Station = {
+    const newStation = {
       stationName: station.stNm,
-      stationId: station.stId, // 서울시 API 필드명: stId
-      arsId: station.arsId     // 서울시 API 필드명: arsId
+      stationId: station.stId,
+      arsId: station.arsId
     };
 
-    try {
-      await axios.post('http://localhost:8080/api/stations', newStation);
-      alert(`${newStation.stationName} 저장 완료!`);
-      getStations(); // 저장된 목록 갱신
-      setSearchResults([]); // 검색 결과 초기화 (선택사항)
-      setSearchKeyword(''); // 검색어 초기화
-    } catch (error) {
-      console.error("저장 실패:", error);
-      alert("저장에 실패했습니다.");
+    const { success } = await request(() => 
+      axios.post('http://localhost:8080/api/stations', newStation)
+    );
+
+    if (success) {
+      alert("저장 완료!");
+      refreshStations(); // ✨ 목록 새로고침 (useAxios의 refetch)
+      setSearchResults([]);
+      setSearchKeyword('');
     }
   };
 
-  // 4. [조회] 버스 도착 정보 확인
-  const handleCheckArrival = async (arsId: string) => {
-    try {
-      setArrivalInfo(null);
-      const response = await axios.get(`http://localhost:8080/api/stations/arrival/${arsId}`);
-      const items = response.data?.msgBody?.itemList;
-      setArrivalInfo(items);
-    } catch (error) {
-      console.error("도착 조회 실패:", error);
+  // 6. 도착 정보 확인 (수동)
+  const handleCheckArrival = async (stId: string) => {
+    setArrivalInfo(null);
+
+    const { success, data } = await request<any>(() => 
+      axios.get(`http://localhost:8080/api/stations/arrival/${stId}`)
+    );
+
+    console.log("🔥 [전체 응답 데이터]:", data);
+    console.log("📂 [msgBody 내용]:", data?.msgBody);
+    console.log("🚌 [itemList (실제 버스 목록)]:", data?.msgBody?.itemList);
+
+    if (success && data) {
+      // 공공데이터 에러 코드 확인
+      if (data.msgHeader?.headerCd !== "0") {
+        alert("API 오류: " + data.msgHeader?.headerMsg);
+        return;
+      }
+      setArrivalInfo(data.msgBody?.itemList);
     }
   };
 
-  // 5. [삭제] 기능 (보너스)
+  // 7. 삭제하기 (수동)
   const handleDelete = async (id: number) => {
-    if(!window.confirm("삭제하시겠습니까?")) return;
-    try {
-      // *참고: 백엔드에 @DeleteMapping 추가 필요 (없으면 에러 날 수 있음)
-      // 현재는 UI에서만 안 보이게 처리하거나, 백엔드 추가 필요
-      alert("삭제 기능은 백엔드 Controller에 @DeleteMapping을 추가해야 동작합니다."); 
-    } catch(e) {}
+    if (!window.confirm("삭제하시겠습니까?")) return;
+    
+    const { success } = await request(() => 
+      axios.delete(`http://localhost:8080/api/stations/${id}`)
+    );
+
+    if (success) {
+      alert("삭제되었습니다.");
+      refreshStations(); // ✨ 목록 새로고침
+    }
   };
 
-return (
+  // 8. 전체 동기화 (수동)
+  const handleSync = async () => {
+    if (!window.confirm("전체 데이터를 저장하시겠습니까?")) return;
+
+    const { success, data } = await request<string>(() => 
+      axios.post('http://localhost:8080/api/stations/sync')
+    );
+
+    console.log("⏳ [Sync] 동기화 요청을 보냈습니다... (기다려주세요)");
+
+    if (success) {
+      console.log("✅ [Sync] 서버 응답(완료):", data); // "총 12000개 저장됨" 메시지
+      alert(data);
+      refreshStations(); // ✨ 목록 새로고침
+    }
+  };
+
+  return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>🚏 나만의 서울 버스 (Full Ver.)</h1>
-      <div style={{ display: 'flex', gap: '20px', flexDirection: 'row' }}>
-        
-        {/* 왼쪽: 내 정류장 검색 및 목록 */}
+      <h1>🚏 나만의 서울 버스 (Hooks Ver.)</h1>
+
+      {/* 로딩 표시 */}
+      {(isListLoading || isActionLoading) && (
+        <div style={{ position:'fixed', top:0, left:0, width:'100%', height:'5px', background:'#FF5722' }} />
+      )}
+      
+      {/* 에러 표시 */}
+      {listError && <div style={{ color:'red', padding:'10px' }}>⚠️ 목록 에러: {listError}</div>}
+
+      {/* 1. 상단: 공공데이터 검색 */}
+      <div style={{ background: '#f5f5f5', padding: '20px', borderRadius: '10px', marginBottom: '30px' }}>
+        <h3>🔍 새 정류장 찾기</h3>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px' }}>
+          <input
+            placeholder="정류장 이름 (예: 강남역)"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            style={{ flex: 1, padding: '10px' }}
+          />
+          <button type="submit">검색</button>
+        </form>
+
+        {searchResults.length > 0 && (
+          <div style={{ marginTop: '10px', maxHeight: '200px', overflowY: 'auto', background:'white' }}>
+            {searchResults.map((item: any, index: number) => (
+              <div key={index} style={{ borderBottom: '1px solid #eee', padding: '10px', display:'flex', justifyContent:'space-between' }}>
+                <div><strong>{item.stNm}</strong> ({item.arsId})</div>
+                <button onClick={() => handleSave(item)} style={{ background:'#4CAF50', color:'white', border:'none', padding:'5px 10px' }}>저장</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <hr />
+
+      <div style={{ display: 'flex', gap: '20px' }}>
+        {/* 좌측: 내 정류장 (useAxios 데이터 사용) */}
         <div style={{ flex: 1 }}>
-          <h3>⭐ 내 정류장 찾기</h3>
+          <h3>⭐ 내 목록 ({filteredStations?.length || 0})</h3> {/* 개수도 필터된 개수로 변경 */}
           
-          {/* ✨ 내 DB 검색창 */}
-          <form onSubmit={handleLocalSearch} style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
+          {/* ✨ [2] 검색창 수정 (form 제거, input만 남김) */}
+          <div style={{ marginBottom: '10px' }}>
             <input 
-                placeholder="저장된 정류장 검색 (예: 강남)"
+                placeholder="내 목록에서 즉시 검색..."
                 value={myKeyword}
                 onChange={(e) => setMyKeyword(e.target.value)}
-                style={{ flex: 1, padding: '8px' }}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
             />
-            <button type="submit" style={{ cursor: 'pointer', background: '#333', color: 'white', border: 'none', padding: '0 15px' }}>
-                검색
-            </button>
-          </form>
+          </div>
 
-          <div style={{ height: '500px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '5px' }}>
-            {stations.length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                    검색어를 입력하여<br/>정류장을 찾아보세요.
-                </div>
+          <div style={{ height: '400px', overflowY: 'auto', border: '1px solid #ddd' }}>
+            {/* ✨ [3] stations 대신 filteredStations 사용 */}
+            {filteredStations && filteredStations.length > 0 ? (
+                filteredStations.map(station => (
+                  <div key={station.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
+                    <div>
+                      <strong>{station.stationName}</strong>
+                      <div style={{ fontSize: '0.8em', color: '#666' }}>{station.arsId}</div>
+                    </div>
+                    <div>
+                      <button onClick={() => handleCheckArrival(station.stationId)} style={{ marginRight:'5px', background:'#2196F3', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>도착</button>
+                      <button onClick={() => station.id && handleDelete(station.id)} style={{ background:'#ff5252', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>삭제</button>
+                    </div>
+                  </div>
+                ))
             ) : (
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                    {stations.map((station) => (
-                    <li key={station.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                        <div style={{ fontWeight: 'bold' }}>{station.stationName}</div>
-                        <div style={{ color: '#666', fontSize: '0.8em' }}>{station.arsId}</div>
-                        </div>
-                        <button 
-                        onClick={() => handleCheckArrival(station.arsId)}
-                        style={{ background: '#2196F3', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}
-                        >
-                        도착
-                        </button>
-                    </li>
-                    ))}
-                </ul>
+                <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                    {stations && stations.length > 0 ? "검색 결과가 없습니다." : "저장된 정류장이 없습니다."}
+                </div>
             )}
           </div>
         </div>
 
-        {/* 오른쪽: 실시간 도착 정보 (기존과 동일) */}
-        <div style={{ flex: 1, background: '#e3f2fd', padding: '20px', borderRadius: '10px', height: 'fit-content' }}>
-          <div style={{ display: 'flex', gap: '20px', flexDirection: 'column'}}>
-            <h3>🚌 실시간 도착 정보</h3>
-              {arrivalInfo ? (
-                Array.isArray(arrivalInfo) ? (
-                  <ul style={{ paddingLeft: '20px' }}>
-                    {arrivalInfo.map((bus: any, index: number) => (
-                      <li key={index} style={{ marginBottom: '8px' }}>
-                        <strong style={{ color: '#0d47a1', fontSize: '1.1em' }}>{bus.rtNm}번</strong>
-                        <br />
-                        <span style={{ color: '#d32f2f' }}>{bus.arrmsg1}</span>
-                        <span style={{ color: '#666', fontSize: '0.8em' }}> (다음: {bus.arrmsg2})</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div>
-                    <strong style={{ color: '#0d47a1' }}>{arrivalInfo.rtNm}번</strong>
-                    <br />
-                    {arrivalInfo.arrmsg1}
-                  </div>
-                )
-              ) : (
-                <div style={{ color: '#666', textAlign: 'center', marginTop: '50px' }}>
-                  왼쪽 목록에서<br/>[도착] 버튼을 눌러주세요.
-                </div>
-              )}
-              {/* 전체 데이터 동기화 버튼 */}
-              <button 
-                onClick={handleSync}
-                disabled={isLoading}
-                style={{ 
-                  background: isLoading ? '#ccc' : '#FF5722', 
-                  color: 'white', border: 'none', padding: '10px 20px', 
-                  borderRadius: '5px', cursor: isLoading ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold', fontSize: '0.9em'
-                }}
-              >
-                {isLoading ? '1만개 데이터 저장 중... ⏳' : '🔄 서울시 전체 데이터 내려받기 (동기화)'}
-              </button>
-          </div>
+        {/* 우측: 도착 정보 */}
+        <div style={{ flex: 1, background: '#e3f2fd', padding: '20px', borderRadius: '10px' }}>
+          <h3>🚌 실시간 도착</h3>
+          {arrivalInfo ? (
+            Array.isArray(arrivalInfo) ? (
+              <ul style={{ paddingLeft: '20px' }}>
+                {arrivalInfo.map((bus: any, index: number) => (
+                  <li key={index} style={{ marginBottom: '10px' }}>
+                    <strong style={{ fontSize:'1.1em', color:'#0d47a1' }}>{bus.rtNm}번</strong><br/>
+                    <span style={{ color:'#d32f2f' }}>{bus.arrmsg1}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div><strong>{arrivalInfo.rtNm}번</strong>: {arrivalInfo.arrmsg1}</div>
+            )
+          ) : (
+            <div style={{ textAlign:'center', color:'#666', marginTop:'50px' }}>
+              [도착] 버튼을 눌러주세요.
+            </div>
+          )}
+          
+          <button 
+            onClick={handleSync}
+            style={{ width:'100%', marginTop:'20px', padding:'10px', background:'#FF5722', color:'white', border:'none' }}
+          >
+            🔄 전체 데이터 동기화
+          </button>
         </div>
-
       </div>
     </div>
   );

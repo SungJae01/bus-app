@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.net.URI;
 import java.util.List;
@@ -16,7 +17,10 @@ import java.util.List;
 public class BusStationController {
 
     private final BusStationRepository repository;
-    private final BusStationService service; // ✨ Service 추가됨
+    private final BusStationService service;
+
+    @Value("${custom.api.service-key}")
+    private String serviceKey;
 
     // [1] 모든 목록 가져오기 (데이터가 너무 많으면 50개만 끊어서 가져오기)
     // 데이터가 12,000개일 때 findAll()을 하면 앱이 멈출 수 있습니다!
@@ -39,16 +43,11 @@ public class BusStationController {
         return service.syncAllStations();
     }
 
-    // [3] ✨ NEW: 실시간 버스 도착 정보 가져오기 (Proxy)
+    // [3] 실시간 버스 도착 정보 가져오기 (Proxy)
     // React가 이 주소로 정류장ID(arsId)를 보내면, 스프링이 공공데이터포털에 물어보고 답해줍니다.
     @GetMapping("/arrival/{arsId}")
     public JsonNode getBusArrival(@PathVariable String arsId) {
         try {
-            // ------------------------------------------------------------
-            // 👇 여기에 본인의 [Decoding] 서비스키를 붙여넣으세요! (따옴표 안에)
-            String serviceKey = "LJMRBV8qLF/6dU+l+Od+giR/mgXa0Aq+Mv8D0+cM3lPGYfIFeiaf/uh/6nmy4xOcF2v2iiZd3gfzeJAc8Xd+Yw==";
-            // ------------------------------------------------------------
-
             // 1. 요청 URL 만들기
             // 서울시 API 주소 (getStationByUid)
             String url = "http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
@@ -76,9 +75,6 @@ public class BusStationController {
     @GetMapping("/search")
     public JsonNode searchStations(@RequestParam String keyword) {
         try {
-            // 👇 본인의 [Decoding] 서비스키 (위와 동일)
-            String serviceKey = "LJMRBV8qLF/6dU+l+Od+giR/mgXa0Aq+Mv8D0+cM3lPGYfIFeiaf/uh/6nmy4xOcF2v2iiZd3gfzeJAc8Xd+Yw==";
-
             // 서울시 정류장 명칭 검색 API (getStationByName)
             // stSrch: 검색어 (한글)
             String url = "http://ws.bus.go.kr/api/rest/stationinfo/getStationByName"
@@ -106,5 +102,13 @@ public class BusStationController {
             return List.of(); // 검색어 없으면 빈 리스트
         }
         return repository.findByStationNameContaining(keyword);
+    }
+
+    // ✨ NEW: 정류장 삭제하기
+    // 요청: DELETE /api/stations/{id}
+    @DeleteMapping("/{id}")
+    public String deleteStation(@PathVariable Long id) {
+        repository.deleteById(id); // JPA가 알아서 삭제해줍니다.
+        return "삭제 완료";
     }
 }
