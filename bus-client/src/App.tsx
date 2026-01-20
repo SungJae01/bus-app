@@ -3,6 +3,9 @@ import axios from 'axios';
 import { useAxios } from './hooks/useAxios'; // 자동 조회 훅
 import { useApi } from './hooks/useApi';     // 수동 요청 훅
 import './App.css';
+import Header from './components/header';
+import SearchStation from './components/searchStation';
+
 
 interface Station {
   id?: number;
@@ -38,19 +41,34 @@ function App() {
   const [myKeyword, setMyKeyword] = useState('');
 
   // 3. 공공데이터 검색 (수동)
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchKeyword) return;
+const handleSearch = async (input?: React.FormEvent | string) => {
+    
+    // (1) 만약 form 이벤트가 들어왔다면 새로고침 방지
+    if (input && typeof input !== 'string') {
+        input.preventDefault();
+    }
 
-    // useApi의 request 사용
+    // (2) 검색어 결정 로직
+    // - input이 문자열이면(아이콘 클릭 시) -> 그 문자열 사용
+    // - input이 이벤트면(엔터 키) -> 기존 state(searchKeyword) 사용
+    const targetKeyword = typeof input === 'string' ? input : searchKeyword;
+
+    if (!targetKeyword) return;
+
+    // (3) API 요청 (searchKeyword 대신 targetKeyword 사용!)
     const { success, data } = await request<any>(() => 
-      axios.get(`http://localhost:8080/api/stations/search?keyword=${searchKeyword}`)
+      axios.get(`http://localhost:8080/api/stations/search?keyword=${targetKeyword}`)
     );
+
+    console.log("🔥 [공공데이터 API 응답]:", data);
 
     if (success && data) {
       const items = data.msgBody?.itemList;
       setSearchResults(items ? (Array.isArray(items) ? items : [items]) : []);
-      if (!items) alert("검색 결과가 없습니다.");
+      
+      if (!items) {
+          alert("검색 결과가 없습니다.");
+      }
     }
   };
 
@@ -140,9 +158,8 @@ function App() {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>🚏 나만의 서울 버스 (Hooks Ver.)</h1>
-
+    <div style={{ maxWidth: '800px', maxHeight: '1169px', margin: '0 auto' }}>
+      <Header />
       {/* 로딩 표시 */}
       {(isListLoading || isActionLoading) && (
         <div style={{ position:'fixed', top:0, left:0, width:'100%', height:'5px', background:'#FF5722' }} />
@@ -151,35 +168,8 @@ function App() {
       {/* 에러 표시 */}
       {listError && <div style={{ color:'red', padding:'10px' }}>⚠️ 목록 에러: {listError}</div>}
 
-      {/* 1. 상단: 공공데이터 검색 */}
-      <div style={{ background: '#f5f5f5', padding: '20px', borderRadius: '10px', marginBottom: '30px' }}>
-        <h3>🔍 새 정류장 찾기</h3>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px' }}>
-          <input
-            placeholder="정류장 이름 (예: 강남역)"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            style={{ flex: 1, padding: '10px' }}
-          />
-          <button type="submit">검색</button>
-        </form>
-
-        {searchResults.length > 0 && (
-          <div style={{ marginTop: '10px', maxHeight: '200px', overflowY: 'auto', background:'white' }}>
-            {searchResults.map((item: any, index: number) => (
-              <div key={index} style={{ borderBottom: '1px solid #eee', padding: '10px', display:'flex', justifyContent:'space-between' }}>
-                <div><strong>{item.stNm}</strong> ({item.arsId})</div>
-                <button onClick={() => handleSave(item)} style={{ background:'#4CAF50', color:'white', border:'none', padding:'5px 10px' }}>저장</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <hr />
-
-      <div style={{ display: 'flex', gap: '20px' }}>
-        {/* 좌측: 내 정류장 (useAxios 데이터 사용) */}
+      <div style={{ height: '700px', width: '340px', display: 'flex', gap: '20px', flexDirection: 'column' }}>
+        {/* 상단: 내 정류장 (useAxios 데이터 사용) */}
         <div style={{ flex: 1 }}>
           <h3>⭐ 내 목록 ({filteredStations?.length || 0})</h3> {/* 개수도 필터된 개수로 변경 */}
           
@@ -193,7 +183,7 @@ function App() {
             />
           </div>
 
-          <div style={{ height: '400px', overflowY: 'auto', border: '1px solid #ddd' }}>
+          <div style={{ height: '50%', overflowY: 'auto', border: '1px solid #ddd' }}>
             {/* ✨ [3] stations 대신 filteredStations 사용 */}
             {filteredStations && filteredStations.length > 0 ? (
                 filteredStations.map(station => (
@@ -216,7 +206,7 @@ function App() {
           </div>
         </div>
 
-        {/* 우측: 도착 정보 */}
+        {/* 하단: 도착 정보 */}
         <div style={{ flex: 1, background: '#e3f2fd', padding: '20px', borderRadius: '10px' }}>
           <h3>🚌 실시간 도착</h3>
           {arrivalInfo ? (
@@ -246,6 +236,11 @@ function App() {
           </button>
         </div>
       </div>
+      <SearchStation
+        value={searchKeyword}           // 상태 전달
+        onChange={setSearchKeyword}     // 변경 함수 전달
+        onSearch={handleSearch} // 검색 함수 전달
+      />
     </div>
   );
 }

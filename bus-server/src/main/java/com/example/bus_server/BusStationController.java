@@ -57,13 +57,21 @@ public class BusStationController {
             // 2. 실제 데이터 요청하기
             RestTemplate restTemplate = new RestTemplate();
             URI uri = new URI(url); // 인코딩 문제 방지를 위해 URI 객체 사용
-            String xmlResponse = restTemplate.getForObject(uri, String.class);
-
-            // 3. XML을 JSON으로 변환하기
+                        String xmlResponse = restTemplate.getForObject(uri, String.class);
+            
             XmlMapper xmlMapper = new XmlMapper();
-            JsonNode jsonNode = xmlMapper.readTree(xmlResponse);
+            JsonNode root = xmlMapper.readTree(xmlResponse); // XML을 JSON으로 변환
 
-            return jsonNode; // React에게 JSON을 던져줍니다!
+            // ✨ [추가] headerMsg 로그 찍기
+            String headerMsg = root.path("msgHeader").path("headerMsg").asText();
+            String headerCd = root.path("msgHeader").path("headerCd").asText();
+            
+            System.out.println("======================================");
+            System.out.println("🔥 API 상태 코드(headerCd): " + headerCd);
+            System.out.println("🔥 API 응답 메시지(headerMsg): " + headerMsg);
+            System.out.println("======================================");
+
+            return root; // React에게 JSON을 던져줍니다!
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -85,9 +93,20 @@ public class BusStationController {
             URI uri = new URI(url);
             
             String xmlResponse = restTemplate.getForObject(uri, String.class);
-
+            
             XmlMapper xmlMapper = new XmlMapper();
-            return xmlMapper.readTree(xmlResponse);
+            JsonNode root = xmlMapper.readTree(xmlResponse); // XML을 JSON으로 변환
+
+            // ✨ [추가] headerMsg 로그 찍기
+            String headerMsg = root.path("msgHeader").path("headerMsg").asText();
+            String headerCd = root.path("msgHeader").path("headerCd").asText();
+            
+            System.out.println("======================================");
+            System.out.println("🔥 API 상태 코드(headerCd): " + headerCd);
+            System.out.println("🔥 API 응답 메시지(headerMsg): " + headerMsg);
+            System.out.println("======================================");
+
+            return root; // 프론트엔드로 데이터 전달
 
         } catch (Exception e) {
             e.printStackTrace();
