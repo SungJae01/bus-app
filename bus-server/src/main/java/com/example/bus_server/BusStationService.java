@@ -3,6 +3,8 @@ package com.example.bus_server;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.val;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -20,6 +22,8 @@ public class BusStationService {
 
     @Value("${custom.api.service-key}")
     private String serviceKey;
+    @Value("${custom.api.base-url}")
+    private String baseUrl;
 
     @Transactional
     public String syncAllStations() {
@@ -31,7 +35,7 @@ public class BusStationService {
                 System.out.println("데이터 동기화 중... 현재 " + pageNo + "페이지 요청");
 
                 // stSrch(검색어)를 비워두면 '전체 목록'을 반환하는 특성을 이용합니다.
-                String url = "http://ws.bus.go.kr/api/rest/stationinfo/getStationByName"
+                String url = baseUrl + "/stationinfo/getStationByName"
                         + "?serviceKey=" + serviceKey // (Decoding 키)
                         + "&numOfRows=1000" // 한 번에 1000개씩 많이!
                         + "&pageNo=" + pageNo; // 페이지 번호 증가

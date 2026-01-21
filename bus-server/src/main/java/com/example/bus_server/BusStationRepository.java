@@ -10,4 +10,5 @@ public interface BusStationRepository extends JpaRepository<BusStation, Long> {
 
     // NEW: 정류장 이름에 특정 단어가 포함된 것 찾기 (LIKE %keyword%)
     List<BusStation> findByStationNameContaining(String keyword);
+    boolean existsByStationId(String stationId);
 }

@@ -5,6 +5,7 @@ import { useApi } from './hooks/useApi';     // 수동 요청 훅
 import './App.css';
 import Header from './components/header';
 import SearchStation from './components/searchStation';
+import SearchResultSheet from './components/SearchResultSheet';
 
 
 interface Station {
@@ -39,9 +40,10 @@ function App() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [myKeyword, setMyKeyword] = useState('');
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   // 3. 공공데이터 검색 (수동)
-const handleSearch = async (input?: React.FormEvent | string) => {
+  const handleSearch = async (input?: React.FormEvent | string) => {
     
     // (1) 만약 form 이벤트가 들어왔다면 새로고침 방지
     if (input && typeof input !== 'string') {
@@ -63,13 +65,54 @@ const handleSearch = async (input?: React.FormEvent | string) => {
     console.log("🔥 [공공데이터 API 응답]:", data);
 
     if (success && data) {
-      const items = data.msgBody?.itemList;
-      setSearchResults(items ? (Array.isArray(items) ? items : [items]) : []);
+      // 데이터 구조 파싱 (msgBody, ServiceResult 등 대응)
+      const msgBody = data.msgBody || data.ServiceResult?.msgBody || data.response?.msgBody;
+      const items = msgBody?.itemList;
+
+      // 배열로 변환
+      const finalItems = items ? (Array.isArray(items) ? items : [items]) : [];
       
-      if (!items) {
+      setSearchResults(finalItems);
+      
+      if (finalItems.length > 0) {
+          // ✨ [핵심] 결과가 있으면 바텀 시트를 엽니다!
+          setIsSheetOpen(true);
+      } else {
           alert("검색 결과가 없습니다.");
       }
     }
+  };
+
+  // 시트에서 정류장을 선택했을 때 DB로 저장 요청
+  const handleSelectStation = async (station: any) => {
+      
+      // 1. 사용자 확인 (선택 사항)
+      // if (!window.confirm(`'${station.stNm}'을(를) 추가하시겠습니까?`)) return;
+
+      // 2. 데이터 매핑 (공공데이터 포맷 -> 내 DB 포맷)
+      // 공공데이터는 stNm, stId 등을 쓰지만, 우리 Entity는 stationName, stationId를 쓸 확률이 높습니다.
+      const payload = {
+          stationName: station.stNm,
+          stationId: station.stId,
+          arsId: station.arsId,
+          // 필요하다면 좌표도 추가 (DB에 컬럼이 있어야 함)
+          // tmX: station.tmX,
+          // tmY: station.tmY
+      };
+
+      console.log("📤 저장 요청 데이터:", payload);
+
+      // 3. 백엔드로 POST 요청 보내기
+      const { success, data } = await request<string>(() => 
+          axios.post('http://localhost:8080/api/stations', payload)
+      );
+
+      // 4. 성공 시 처리
+      if (success) {
+          alert("내 목록에 저장되었습니다! 🎉"); // "저장되었습니다!" 메시지
+          setIsSheetOpen(false); // 시트 닫기
+          refreshStations(); // ✨ [중요] 내 목록(메인화면) 새로고침!
+      }
   };
 
   // 4. 내 목록 검색 (수동)
@@ -105,11 +148,11 @@ const handleSearch = async (input?: React.FormEvent | string) => {
   };
 
   // 6. 도착 정보 확인 (수동)
-  const handleCheckArrival = async (stId: string) => {
+  const handleCheckArrival = async (arsId: string) => {
     setArrivalInfo(null);
 
     const { success, data } = await request<any>(() => 
-      axios.get(`http://localhost:8080/api/stations/arrival/${stId}`)
+      axios.get(`http://localhost:8080/api/stations/arrival/${arsId}`)
     );
 
     console.log("🔥 [전체 응답 데이터]:", data);
@@ -193,7 +236,7 @@ const handleSearch = async (input?: React.FormEvent | string) => {
                       <div style={{ fontSize: '0.8em', color: '#666' }}>{station.arsId}</div>
                     </div>
                     <div>
-                      <button onClick={() => handleCheckArrival(station.stationId)} style={{ marginRight:'5px', background:'#2196F3', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>도착</button>
+                      <button onClick={() => handleCheckArrival(station.arsId)} style={{ marginRight:'5px', background:'#2196F3', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>도착</button>
                       <button onClick={() => station.id && handleDelete(station.id)} style={{ background:'#ff5252', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>삭제</button>
                     </div>
                   </div>
@@ -236,6 +279,12 @@ const handleSearch = async (input?: React.FormEvent | string) => {
           </button>
         </div>
       </div>
+      <SearchResultSheet 
+            isOpen={isSheetOpen}
+            onClose={() => setIsSheetOpen(false)}
+            results={searchResults}
+            onSelect={handleSelectStation}
+        />
       <SearchStation
         value={searchKeyword}           // 상태 전달
         onChange={setSearchKeyword}     // 변경 함수 전달
