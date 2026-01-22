@@ -13,6 +13,7 @@ interface Station {
   stationId: string;
   stationName: string;
   arsId: string;
+  adirection?: string;
 }
 
 function App() {
@@ -83,35 +84,57 @@ function App() {
     }
   };
 
-  // 시트에서 정류장을 선택했을 때 DB로 저장 요청
+  // ✨ [수정] 정류장 선택 시: "도착 정보"를 조회해 방면을 채운 뒤 저장
   const handleSelectStation = async (station: any) => {
       
-      // 1. 사용자 확인 (선택 사항)
+      // 사용자에게 의사 묻기 (선택사항)
       // if (!window.confirm(`'${station.stNm}'을(를) 추가하시겠습니까?`)) return;
 
-      // 2. 데이터 매핑 (공공데이터 포맷 -> 내 DB 포맷)
-      // 공공데이터는 stNm, stId 등을 쓰지만, 우리 Entity는 stationName, stationId를 쓸 확률이 높습니다.
+      let direction = ""; // 기본값은 빈 문자열
+
+      // 1. 방면 정보를 얻기 위해 도착 API를 먼저 살짝 호출해봅니다.
+      try {
+          console.log(`🔍 [${station.stNm}] 방면 정보 조회 중...`);
+          // 기존에 만들어둔 도착 정보 API 활용
+          const res = await axios.get(`http://localhost:8080/api/stations/arrival?arsId=${station.arsId}`);
+          
+          // 데이터 파싱
+          const data = res.data;
+          const msgBody = data.msgBody || data.ServiceResult?.msgBody || data.response?.msgBody;
+          const items = msgBody?.itemList;
+          
+          if (items) {
+              // 결과가 배열이면 첫 번째, 객체면 바로 사용
+              const firstItem = Array.isArray(items) ? items[0] : items;
+              // adirection(방면) 값을 가져옴
+              if (firstItem && firstItem.adirection) {
+                  direction = firstItem.adirection;
+                  console.log("✅ 방면 정보 발견:", direction);
+              }
+          }
+      } catch (error) {
+          console.warn("방면 정보 조회 실패 (무시하고 진행):", error);
+      }
+
+      // 2. 완성된 데이터로 저장 요청 (payload 생성)
       const payload = {
           stationName: station.stNm,
           stationId: station.stId,
           arsId: station.arsId,
-          // 필요하다면 좌표도 추가 (DB에 컬럼이 있어야 함)
-          // tmX: station.tmX,
-          // tmY: station.tmY
+          adirection: direction, // ✨ 여기서 조회한 방면 정보를 넣습니다!
       };
 
-      console.log("📤 저장 요청 데이터:", payload);
+      console.log("📤 최종 저장 데이터:", payload);
 
-      // 3. 백엔드로 POST 요청 보내기
-      const { success, data } = await request<string>(() => 
+      // 3. 백엔드로 POST 요청 (기존 코드와 동일)
+      const { success, data: responseMsg } = await request<any>(() => 
           axios.post('http://localhost:8080/api/stations', payload)
       );
 
-      // 4. 성공 시 처리
       if (success) {
-          alert("내 목록에 저장되었습니다! 🎉"); // "저장되었습니다!" 메시지
-          setIsSheetOpen(false); // 시트 닫기
-          refreshStations(); // ✨ [중요] 내 목록(메인화면) 새로고침!
+          alert(`'${station.stNm}' (${direction ? direction + ' 방면' : '방면 정보 없음'}) 저장 완료! 🎉`);
+          setIsSheetOpen(false); 
+          refreshStations(); 
       }
   };
 
@@ -183,23 +206,6 @@ function App() {
     }
   };
 
-  // 8. 전체 동기화 (수동)
-  const handleSync = async () => {
-    if (!window.confirm("전체 데이터를 저장하시겠습니까?")) return;
-
-    const { success, data } = await request<string>(() => 
-      axios.post('http://localhost:8080/api/stations/sync')
-    );
-
-    console.log("⏳ [Sync] 동기화 요청을 보냈습니다... (기다려주세요)");
-
-    if (success) {
-      console.log("✅ [Sync] 서버 응답(완료):", data); // "총 12000개 저장됨" 메시지
-      alert(data);
-      refreshStations(); // ✨ 목록 새로고침
-    }
-  };
-
   return (
     <div style={{ maxWidth: '800px', maxHeight: '1169px', margin: '0 auto' }}>
       <Header />
@@ -231,9 +237,14 @@ function App() {
             {filteredStations && filteredStations.length > 0 ? (
                 filteredStations.map(station => (
                   <div key={station.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
-                    <div>
-                      <strong>{station.stationName}</strong>
-                      <div style={{ fontSize: '0.8em', color: '#666' }}>{station.arsId}</div>
+                    {/* 정류장 이름 */}
+                    <div style={{ fontWeight: 'bold' }}>{station.stationName}</div>
+                    
+                    {/* ARS 번호 및 방면 */}
+                    <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                        {station.arsId}
+                        {/* ✨ [추가] 방면 정보가 있으면 표시 */}
+                        {station.adirection && ` | ${station.adirection} 방면`}
                     </div>
                     <div>
                       <button onClick={() => handleCheckArrival(station.arsId)} style={{ marginRight:'5px', background:'#2196F3', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>도착</button>
@@ -270,13 +281,6 @@ function App() {
               [도착] 버튼을 눌러주세요.
             </div>
           )}
-          
-          <button 
-            onClick={handleSync}
-            style={{ width:'100%', marginTop:'20px', padding:'10px', background:'#FF5722', color:'white', border:'none' }}
-          >
-            🔄 전체 데이터 동기화
-          </button>
         </div>
       </div>
       <SearchResultSheet 

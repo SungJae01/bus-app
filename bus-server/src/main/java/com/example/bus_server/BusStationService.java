@@ -91,6 +91,7 @@ public class BusStationService {
         String arsId = item.path("arsId").asText();
         String stNm = item.path("stNm").asText();
         String stId = item.path("stId").asText(); // 9자리 ID
+        String adirection = item.path("adirection").asText();
 
         // 1. 가상 정류장(arsId가 0) 제외
         if (arsId == null || arsId.equals("0") || arsId.isEmpty()) return;
@@ -102,6 +103,7 @@ public class BusStationService {
         station.setArsId(arsId);
         station.setStationName(stNm);
         station.setStationId(stId);
+        station.setAdirection(adirection);
         
         batchList.add(station);
     }

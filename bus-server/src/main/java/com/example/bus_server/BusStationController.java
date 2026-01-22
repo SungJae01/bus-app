@@ -133,6 +133,34 @@ public class BusStationController {
             return null;
         }
     }
+
+    @GetMapping("/arrival")
+    public Map<String, Object> getBusArrivalList(@RequestParam String arsId) {
+        try {
+            // 1. 서울시 실시간 도착 정보 API URL (getStationByUid)
+            // 서비스 키는 기존에 정의한 serviceKey 변수 사용
+            String url = "http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid"
+                    + "?serviceKey=" + serviceKey
+                    + "&arsId=" + arsId;
+
+            // 2. 요청 보내기
+            RestTemplate restTemplate = new RestTemplate();
+            URI uri = new URI(url);
+            String xmlResponse = restTemplate.getForObject(uri, String.class);
+
+            // 3. XML -> JSON 변환
+            XmlMapper xmlMapper = new XmlMapper();
+            JsonNode root = xmlMapper.readTree(xmlResponse);
+
+            // 4. 껍데기 벗겨서 Map으로 반환 (프론트에서 바로 쓸 수 있게)
+            ObjectMapper jsonMapper = new ObjectMapper();
+            return jsonMapper.convertValue(root, Map.class);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
     // ✨ 내 DB에서 정류장 이름으로 검색하기
     // 요청: GET /api/stations/local-search?keyword=강남
     @GetMapping("/local-search")

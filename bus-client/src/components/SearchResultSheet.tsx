@@ -120,6 +120,7 @@ interface Station {
     stNm: string;
     arsId: string;
     stId: string;
+    adirection?: string;
     tmX?: string;
     tmY?: string;
 }
@@ -160,7 +161,10 @@ const SearchResultSheet: React.FC<Props> = ({ isOpen, onClose, results, onSelect
                                     {/* 정류장 이름 */}
                                     <strong>{station.stNm}</strong>
                                     {/* ARS ID와 관리 ID 표시 */}
-                                    <span>ARS: {station.arsId} | ID: {station.stId}</span>
+                                    <span>
+                                        {station.arsId} 
+                                        {station.adirection ? ` | ${station.adirection} 방면` : ''}
+                                    </span>
                                 </div>
                             </ListItem>
                         ))
