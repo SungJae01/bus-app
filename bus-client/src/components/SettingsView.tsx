@@ -1,0 +1,10 @@
+const SettingsView = () => {
+    return (
+        <div>
+            <h2>설정 화면</h2>
+            <p>여기에 설정 화면 컨텐츠가 표시됩니다.</p>
+        </div>
+    );
+}
+
+export default SettingsView;

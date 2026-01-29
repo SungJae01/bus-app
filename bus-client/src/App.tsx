@@ -6,8 +6,13 @@ import './App.css';
 import Header from './components/header';
 import SearchStation from './components/searchStation';
 import SearchResultSheet from './components/SearchResultSheet';
+import HeaderMenu from './components/headerMenu';
+import HomeView from './components/HomeView';
+import SearchView from './components/SearchVeiw';
+import FavoriteView from './components/FavoriteView';
+import SettingsView from './components/SettingsView';
 
-
+// 정류장 인터페이스 정의
 interface Station {
   id?: number;
   stationId: string;
@@ -18,7 +23,7 @@ interface Station {
 
 function App() {
   // ✅ 1. 내 정류장 목록 (자동 조회)
-  // useAxios 덕분에 useEffect가 필요 없습니다!
+  // useAxios 덕분에 useEffect가 필요 없음
   const { 
     data: stations, 
     loading: isListLoading, 
@@ -42,6 +47,24 @@ function App() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [myKeyword, setMyKeyword] = useState('');
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  // 현재 보고 있는 화면의 상태 (기본값: home)
+  const [currentView, setCurrentView] = useState('home');
+
+  // 예시 컴포넌트들
+  //const HomeView = () => <div>🏠 홈 화면입니다.</div>;
+  //const SearchView = () => <div>🔍 검색 화면입니다.</div>;
+  //const FavoriteView = () => <div>⭐ 즐겨찾기 화면입니다.</div>;
+  //const SettingsView = () => <div>⚙️ 설정 화면입니다.</div>;
+
+  const renderContent = () => {
+        switch (currentView) {
+            case 'home': return <HomeView />;
+            case 'search': return <SearchView />;
+            case 'favorite': return <FavoriteView />;
+            case 'settings': return <SettingsView />;
+            default: return <HomeView />;
+        }
+    };
 
   // 3. 공공데이터 검색 (수동)
   const handleSearch = async (input?: React.FormEvent | string) => {
@@ -209,80 +232,11 @@ function App() {
   return (
     <div style={{ maxWidth: '800px', maxHeight: '1169px', margin: '0 auto' }}>
       <Header />
-      {/* 로딩 표시 */}
-      {(isListLoading || isActionLoading) && (
-        <div style={{ position:'fixed', top:0, left:0, width:'100%', height:'5px', background:'#FF5722' }} />
-      )}
-      
-      {/* 에러 표시 */}
-      {listError && <div style={{ color:'red', padding:'10px' }}>⚠️ 목록 에러: {listError}</div>}
-
-      <div style={{ height: '700px', width: '340px', display: 'flex', gap: '20px', flexDirection: 'column' }}>
-        {/* 상단: 내 정류장 (useAxios 데이터 사용) */}
-        <div style={{ flex: 1 }}>
-          <h3>⭐ 내 목록 ({filteredStations?.length || 0})</h3> {/* 개수도 필터된 개수로 변경 */}
-          
-          {/* ✨ [2] 검색창 수정 (form 제거, input만 남김) */}
-          <div style={{ marginBottom: '10px' }}>
-            <input 
-                placeholder="내 목록에서 즉시 검색..."
-                value={myKeyword}
-                onChange={(e) => setMyKeyword(e.target.value)}
-                style={{ width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
-            />
-          </div>
-
-          <div style={{ height: '50%', overflowY: 'auto', border: '1px solid #ddd' }}>
-            {/* ✨ [3] stations 대신 filteredStations 사용 */}
-            {filteredStations && filteredStations.length > 0 ? (
-                filteredStations.map(station => (
-                  <div key={station.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
-                    {/* 정류장 이름 */}
-                    <div style={{ fontWeight: 'bold' }}>{station.stationName}</div>
-                    
-                    {/* ARS 번호 및 방면 */}
-                    <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                        {station.arsId}
-                        {/* ✨ [추가] 방면 정보가 있으면 표시 */}
-                        {station.adirection && ` | ${station.adirection} 방면`}
-                    </div>
-                    <div>
-                      <button onClick={() => handleCheckArrival(station.arsId)} style={{ marginRight:'5px', background:'#2196F3', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>도착</button>
-                      <button onClick={() => station.id && handleDelete(station.id)} style={{ background:'#ff5252', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>삭제</button>
-                    </div>
-                  </div>
-                ))
-            ) : (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                    {stations && stations.length > 0 ? "검색 결과가 없습니다." : "저장된 정류장이 없습니다."}
-                </div>
-            )}
-          </div>
-        </div>
-
-        {/* 하단: 도착 정보 */}
-        <div style={{ flex: 1, background: '#e3f2fd', padding: '20px', borderRadius: '10px' }}>
-          <h3>🚌 실시간 도착</h3>
-          {arrivalInfo ? (
-            Array.isArray(arrivalInfo) ? (
-              <ul style={{ paddingLeft: '20px' }}>
-                {arrivalInfo.map((bus: any, index: number) => (
-                  <li key={index} style={{ marginBottom: '10px' }}>
-                    <strong style={{ fontSize:'1.1em', color:'#0d47a1' }}>{bus.rtNm}번</strong><br/>
-                    <span style={{ color:'#d32f2f' }}>{bus.arrmsg1}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div><strong>{arrivalInfo.rtNm}번</strong>: {arrivalInfo.arrmsg1}</div>
-            )
-          ) : (
-            <div style={{ textAlign:'center', color:'#666', marginTop:'50px' }}>
-              [도착] 버튼을 눌러주세요.
-            </div>
-          )}
-        </div>
-      </div>
+      <HeaderMenu onMenuSelect={setCurrentView}/>
+      <main style={{ padding: '20px' }}>
+                <h2>메인 컨텐츠 영역</h2>
+                {renderContent()}
+            </main>
       <SearchResultSheet 
             isOpen={isSheetOpen}
             onClose={() => setIsSheetOpen(false)}
@@ -299,3 +253,73 @@ function App() {
 }
 
 export default App;
+
+// 로딩 표시
+//         {(isListLoading || isActionLoading) && (
+//           <div style={{ position:'fixed', top:0, left:0, width:'100%', height:'5px', background:'#FF5722' }} />
+//         )}
+        
+//         <div style={{ height: '700px', width: '340px', display: 'flex', gap: '20px', flexDirection: 'column' }}>
+//           {/* 상단: 내 정류장 (useAxios 데이터 사용) */}
+//           <div style={{ flex: 1 }}>          
+//             {/* ✨ [2] 검색창 수정 (form 제거, input만 남김) */}
+//             <div style={{ marginBottom: '10px' }}>
+//               <input 
+//                   placeholder="내 목록에서 즉시 검색..."
+//                   value={myKeyword}
+//                   onChange={(e) => setMyKeyword(e.target.value)}
+//                   style={{ width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
+//               />
+//             </div>
+
+//             <div style={{ height: '50%', overflowY: 'auto', border: '1px solid #ddd' }}>
+//               {/* ✨ [3] stations 대신 filteredStations 사용 */}
+//               {filteredStations && filteredStations.length > 0 ? (
+//                   filteredStations.map(station => (
+//                     <div key={station.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
+//                       {/* 정류장 이름 */}
+//                       <div style={{ fontWeight: 'bold' }}>{station.stationName}</div>
+                      
+//                       {/* ARS 번호 및 방면 */}
+//                       <div style={{ fontSize: '0.8rem', color: '#666' }}>
+//                           {station.arsId}
+//                           {/* ✨ [추가] 방면 정보가 있으면 표시 */}
+//                           {station.adirection && ` | ${station.adirection} 방면`}
+//                       </div>
+//                       <div>
+//                         <button onClick={() => handleCheckArrival(station.arsId)} style={{ marginRight:'5px', background:'#2196F3', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>도착</button>
+//                         <button onClick={() => station.id && handleDelete(station.id)} style={{ background:'#ff5252', color:'white', border:'none', padding:'5px', borderRadius:'3px', cursor: 'pointer' }}>삭제</button>
+//                       </div>
+//                     </div>
+//                   ))
+//               ) : (
+//                   <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+//                       {stations && stations.length > 0 ? "검색 결과가 없습니다." : "저장된 정류장이 없습니다."}
+//                   </div>
+//               )}
+//             </div>
+//           </div>
+
+//           {/* 하단: 도착 정보 */}
+//           <div style={{ flex: 1, background: '#e3f2fd', padding: '20px', borderRadius: '10px' }}>
+//             <h3>🚌 실시간 도착</h3>
+//             {arrivalInfo ? (
+//               Array.isArray(arrivalInfo) ? (
+//                 <ul style={{ paddingLeft: '20px' }}>
+//                   {arrivalInfo.map((bus: any, index: number) => (
+//                     <li key={index} style={{ marginBottom: '10px' }}>
+//                       <strong style={{ fontSize:'1.1em', color:'#0d47a1' }}>{bus.rtNm}번</strong><br/>
+//                       <span style={{ color:'#d32f2f' }}>{bus.arrmsg1}</span>
+//                     </li>
+//                   ))}
+//                 </ul>
+//               ) : (
+//                 <div><strong>{arrivalInfo.rtNm}번</strong>: {arrivalInfo.arrmsg1}</div>
+//               )
+//             ) : (
+//               <div style={{ textAlign:'center', color:'#666', marginTop:'50px' }}>
+//                 [도착] 버튼을 눌러주세요.
+//               </div>
+//             )}
+//           </div>
+//         </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import styled from '@emotion/styled';
 import { MdMenu, MdNotificationsNone } from 'react-icons/md';
 
+// Emotion 을 활용한 <header> 시멘틱 태그 스타일링
 const HeaderContainer = styled.header`
     width: 100%;
     height: 50px;
@@ -29,7 +30,7 @@ const HeaderContainer = styled.header`
     }
 `;
 
-// ✨ 3. 아이콘 버튼을 위한 스타일 컴포넌트 추가
+// 아이콘 버튼을 위한 스타일 컴포넌트 추가
 const IconButton = styled.button`
     background: none;
     border: none;
@@ -52,12 +53,20 @@ const IconButton = styled.button`
     }
 `;
 
+// TypeScript 인터페이스 정의
+// 인터페이스란 컴포넌트가 받을 props의 타입을 정의하는 역할을 합니다.
+// OnMenuClick과 OnAlarmClick은 각각 메뉴 버튼과 알람 버튼 클릭 시 호출될 함수 타입입니다.
+// 물음표(?)는 해당 props가 선택적(optional)임을 나타냅니다.
 interface HeaderProps {
     // 나중에 메뉴 클릭 이벤트 등을 props로 받을 수 있습니다.
     onMenuClick?: () => void;
     onAlarmClick?: () => void;
 }
 
+// Header 컴포넌트 정의
+// React.FC는 Function Component의 약자입니다.
+// 제네릭으로 HeaderProps를 전달하여 props의 타입을 지정합니다.
+// Header 컴포넌트는 위에서 정의한 HeaderProps 타입의 props를 받습니다.
 const Header: React.FC<HeaderProps> = ({ onMenuClick, onAlarmClick }) => {
     return (
         <HeaderContainer>
