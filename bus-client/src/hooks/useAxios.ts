@@ -28,3 +28,5 @@ export function useAxios<T>(url: string) {
     // refetch: 저장/삭제 후 목록을 다시 불러올 때 사용
     return { data, loading, error, refetch: fetchData };
 }
+
+export default useAxios;

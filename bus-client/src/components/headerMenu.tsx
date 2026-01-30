@@ -69,7 +69,7 @@ const HeaderMenu: React.FC <HeaderMenuProps> = ({ onMenuSelect}) => {
             <ul onClick={handleMenuClick}>
                 <li data-menu="home">홈</li>
                 <li data-menu="search">검색</li>
-                <li data-menu="favorites">즐겨찾기</li>
+                <li data-menu="favorite">즐겨찾기</li>
                 <li data-menu="settings">설정</li>
             </ul>
         </Nav>
